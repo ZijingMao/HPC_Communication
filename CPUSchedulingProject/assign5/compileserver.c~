@@ -1,0 +1,132 @@
+#include <stdio.h>
+#include <stdlib.h>
+#include <unistd.h>
+#include <limits.h>
+#include <sys/types.h>
+#include <sys/wait.h>
+#include "restart.h"
+#include "uici.h"
+#include "makelib.h"
+
+#define BLKSIZE PIPE_BUF
+
+static char *zero = "0";
+static char *one = "1";
+
+static pthread_mutex_t compilelock = PTHREAD_MUTEX_INITIALIZER;
+ 
+int copy2files(int fromfd1, int tofd1, int fromfd2, int tofd2);
+
+int compile(const char *str1, const char *str2);
+ 
+/*
+ *                       UICI Server
+ *  Open a UICI port specified as a command-line argument
+ *  and wait for requests.  When a request arrives,
+ *  fork a child to handle the communication and resume
+ *  waiting for another request.
+ */
+int main(int argc, char *argv[])
+{
+   u_port_t portnumber;
+   int listenfd;
+   int communfd;
+   char client[MAX_CANON];
+   char path[] = "/usr/bin/gcc";
+   pid_t child;
+ 
+   if (argc != 2) {
+      fprintf(stderr, "Usage: %s port\n", argv[0]);
+      return 1;   
+   }  
+ 
+   portnumber = (u_port_t) atoi(argv[1]);
+   if ((listenfd = u_open(portnumber)) < 0) {
+      perror("Listen endpoint creation failed");
+      return 1;
+   }
+ 
+   fprintf(stderr, "[%ld]: Waiting for the first connection on port %d\n",
+                    (long)getpid(), (int)portnumber);
+   for ( ; ; ) {
+      if ((communfd = u_accept(listenfd, client, MAX_CANON)) != -1) {
+         fprintf(stderr, "[%ld]: A connection has been received from %s\n",
+                 (long) getpid(), client);
+         if ((child = fork()) == -1)
+            perror("Could not fork a child");
+ 
+         if (child == 0) {                            /* child code */
+            r_close(listenfd);
+
+	    const char *str_buf;
+	    char buf[BLKSIZE];
+	    char *filepath;
+  	    char *filename;
+	    char *p;
+	    int error;
+	    int bytesread;
+	    int byteswritten;
+	    int filenamelen = 0;
+
+	    if((filepath = malloc(sizeof(char) * BLKSIZE)) == NULL)
+		return 0;
+	    if((filename = malloc(sizeof(char) * BLKSIZE)) == NULL)
+		return 0;
+
+	    if((bytesread = r_read(communfd, buf, BLKSIZE)) < 0){
+		return -1;
+	    }
+	    if(bytesread == 0){
+		return 0;
+	    }
+
+	    str_buf = buf;
+	    strcpy(filename, str_buf);
+	    strcpy(filepath, str_buf);
+	    p = filename;
+	    p = p + bytesread;
+	    while(*p != '/'){
+		p = p - 1;
+		filenamelen++;
+	    }
+
+	    filename = p + 1;
+	    *(filename + filenamelen - 2) = '\0';
+
+	    *(filepath + bytesread - filenamelen) = '\0';
+
+	    chdir(filepath);
+
+
+	    if(error = pthread_mutex_lock(&compilelock)){
+		perror("Failed to lock");
+		return NULL;
+	    }
+	    if(compile(path, filename) == 1){
+		byteswritten = write(communfd, zero, 1);
+		pthread_mutex_unlock(&compilelock);
+		if((byteswritten) == -1)
+		    return -1;
+	    }
+	    else{
+		byteswritten = write(communfd, one, 1);
+		pthread_mutex_unlock(&compilelock);
+		if((byteswritten) == -1)
+		    return -1;
+	    }
+
+            r_close(communfd);
+            fprintf(stderr, "[%ld]:Bytes transferred = %d\n",
+                           (long) getpid(), bytesread);
+	   
+	    free(filepath);
+            return 0;
+         } else {                                    /* parent code */
+            r_close(communfd);
+            while (r_waitpid(-1, NULL, WNOHANG) > 0) ;  /* clean up zombies */
+         }
+      }
+      else
+         perror("Accept failed");
+   }
+}

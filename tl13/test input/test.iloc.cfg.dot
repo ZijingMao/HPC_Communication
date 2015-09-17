@@ -1,0 +1,17 @@
+digraph parseTree {
+node [shape = none]; edge [tailport = s]; entry subgraph cluster { color="/x11/white"
+B0 [label=<<table border="0">
+<tr><td border="1" colspan="3">B0</td></tr>
+<tr><td align="left">loadI</td><td align="left">0</td><td align="left">=&gt; r_X</td></tr>
+<tr><td align="left">loadI</td><td align="left">0</td><td align="left">=&gt; r_Y</td></tr>
+<tr><td align="left">loadI</td><td align="left">0</td><td align="left">=&gt; r_Z</td></tr>
+<tr><td align="left">loadI</td><td align="left">39</td><td align="left">=&gt; r0</td></tr>
+<tr><td align="left">i2i</td><td align="left">r0</td><td align="left">=&gt; r_X</td></tr>
+<tr><td align="left">loadI</td><td align="left">97</td><td align="left">=&gt; r1</td></tr>
+<tr><td align="left">i2i</td><td align="left">r1</td><td align="left">=&gt; r_Y</td></tr>
+<tr><td align="left">i2i</td><td align="left">r_Z</td><td align="left">=&gt; r2</td></tr>
+<tr><td align="left">loadI</td><td align="left">1</td><td align="left">=&gt; r3</td></tr>
+<tr><td align="left">add</td><td align="left">r2,r3</td><td align="left">=&gt; r4</td></tr>
+<tr><td align="left">i2i</td><td align="left">r4</td><td align="left">=&gt; r_Z</td></tr>
+</table>>,fillcolor="/x11/white",shape=box]
+} entry -> B0 B0 -> exit }

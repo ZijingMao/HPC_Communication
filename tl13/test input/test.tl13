@@ -1,0 +1,17 @@
+%test
+$comment
+comment comment comment
+cccooommeennttt
+$
+
+program
+   var X as char;
+   var Y as char;
+   var Z as int;
+   
+begin
+   X:='\'';
+   Y:='a';
+   Z:=Z+1;
+
+end

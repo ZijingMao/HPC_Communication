@@ -1,0 +1,43 @@
+digraph parseTree {
+	ordering=out;
+	node [shape = box, style = filled];
+	n1 [label="program",fillcolor="/x11/white",shape=box]
+	n2 [label="decl list",fillcolor="/x11/white",shape=box]
+	n1 -> n2
+	n3 [label="declaration: 'X'",fillcolor="/pastel13/2",shape=box]
+	n2 -> n3
+	n4 [label="char",fillcolor="/x11/white",shape=box]
+	n3 -> n4
+	n5 [label="declaration: 'Y'",fillcolor="/pastel13/2",shape=box]
+	n2 -> n5
+	n6 [label="char",fillcolor="/x11/white",shape=box]
+	n5 -> n6
+	n7 [label="declaration: 'Z'",fillcolor="/pastel13/3",shape=box]
+	n2 -> n7
+	n8 [label="int",fillcolor="/x11/white",shape=box]
+	n7 -> n8
+	n9 [label="stmt list",fillcolor="/x11/white",shape=box]
+	n1 -> n9
+	n10 [label=":=",fillcolor="/x11/white",shape=box]
+	n9 -> n10
+	n11 [label="X",fillcolor="/x11/white",shape=box]
+	n10 -> n11
+	n12 [label="'",fillcolor="/pastel13/3",shape=box]
+	n10 -> n12
+	n13 [label=":=",fillcolor="/x11/white",shape=box]
+	n9 -> n13
+	n14 [label="Y",fillcolor="/x11/white",shape=box]
+	n13 -> n14
+	n15 [label="a",fillcolor="/pastel13/3",shape=box]
+	n13 -> n15
+	n16 [label=":=",fillcolor="/x11/white",shape=box]
+	n9 -> n16
+	n17 [label="Z",fillcolor="/x11/white",shape=box]
+	n16 -> n17
+	n18 [label="+",fillcolor="/x11/white",shape=box]
+	n16 -> n18
+	n19 [label="Z",fillcolor="/pastel13/3",shape=box]
+	n18 -> n19
+	n20 [label="1",fillcolor="/pastel13/3",shape=box]
+	n18 -> n20
+}

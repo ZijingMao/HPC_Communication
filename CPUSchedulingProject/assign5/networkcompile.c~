@@ -1,0 +1,188 @@
+#include <stdio.h>
+#include <stdlib.h>
+#include <unistd.h>
+#include <limits.h>
+#include <sys/types.h>
+#include <sys/wait.h>
+#include <pthread.h>
+#include "makelib.h"
+#include "uici.h"
+#include "restart.h"
+
+#define BLKSIZE PIPE_BUF
+
+static int zero = 0;
+static int one = 1;
+
+static pthread_mutex_t compilelock = PTHREAD_MUTEX_INITIALIZER;
+
+struct connectpara{				/*Used to pass three parameters into threadconnect*/
+	u_port_t portnumber; 
+	char *hostname;
+	char *filename;
+};
+
+/*
+This function is used to execute in a thread.
+It will connect a server with hostname and port number.
+It will send a full path of the named filename under the current working directory
+to the server.
+The server will return back a point to a number, if successful is 0, failed is 1.
+The mutex lock is used to lock the communication process.
+*/
+void *threadconnect(void *arg){
+	char flag[1];
+	int flag_num;
+	int bytescopied;
+	int communfd;
+	int error;
+	char compilepath[BLKSIZE];
+	int i =0;
+	const char *str_name;
+
+	struct connectpara *cp;
+	cp = (struct connectpara *)(arg);
+
+	u_port_t pn = 0;
+	char *hn = NULL;
+	char *fn = NULL;
+	
+	pn = (*cp).portnumber;
+	hn = (*cp).hostname;
+	fn = (*cp).filename;
+
+	if ((communfd = u_connect(pn, hn)) == -1) {
+		perror("Failed to establish connection");
+		return NULL;
+	}
+	fprintf(stderr, "[%ld]:connection made to %s\n", (long)getpid(), hn);
+
+	str_name = fn;
+
+	getcwd(compilepath, BLKSIZE);
+
+	strcat(compilepath, "/");
+	strcat(compilepath, str_name);
+	strcat(compilepath, "\n");
+
+	if(r_write(communfd, compilepath, strlen(compilepath)) < 0){
+		fprintf(stderr, "Could not write to communfd\n");
+		return NULL;
+	}
+
+	if ((i = r_read(communfd, flag, 1)) < 0){		//read flag from STDOUT_FILENO
+		fprintf(stderr, "Could not read flag from communfd.\n");
+		return NULL;
+	}
+
+	if(flag_num = (int) atoi(flag)){
+		return &one;
+	}
+	else{
+		return &zero;
+	}
+}
+
+int main(int argc, char *argv[]) {
+	u_port_t portnumber;
+	pthread_t *tid;
+	int i;
+	int pos = 0;
+	int flag = 0;
+	int error;
+	int *return_value;
+	int child;
+	char path[] = "/usr/bin/gcc";	
+	char **snew;
+
+	if((snew = (char **)malloc(sizeof(char *)*(argc + 3))) == NULL){
+		perror("Unable to allocate exec arguments");
+		return 0;
+	}
+
+	*snew = path;
+	pos = (argc + 1)/2;
+
+	for(i = 0; i < argc-2; i+=2){
+		const char *str_name = argv[i+3];
+		char *name_o;
+		
+		if((name_o = malloc(strlen(str_name) + 1)) == NULL)
+			return 0;
+
+		strcpy(name_o, str_name);
+		strcat(name_o, ".o");
+
+		*(snew + i/2 + 1) = name_o;
+	}
+	*(snew + pos) = "-o";
+	*(snew + pos + 1) = argv[3];
+	*(snew + pos + 2) = 0;
+	if (argc%2 != 1 && argc <= 1) {
+		fprintf(stderr, "Usage: %s port {hostname filename}\n", argv[0]);
+		return 1;
+	}
+
+	fprintf(stderr, "networkcompile written by Zijing Mao\n");
+
+	portnumber = (u_port_t)atoi(argv[1]);
+
+	if((tid = (pthread_t *)calloc(argc - 1, sizeof(pthread_t))) == NULL){
+		perror("Failed to allocate.");
+		return 0;
+	}
+
+	for(i = 0; i < argc-2; i+=2){
+		struct connectpara conn_para;
+		conn_para.portnumber = portnumber;
+		conn_para.hostname = argv[i + 2];			/* get the host name */
+		conn_para.filename = argv[i + 3];			/* get the file name */
+		if (error = pthread_create(tid + i, NULL, threadconnect, &(conn_para))){
+			fprintf(stderr, "Failed to create thread: %s\n", strerror(error));
+			return 0;
+		}
+		fprintf(stderr, "%s\n", argv[i]);
+	}
+
+	for (i = 0; i < argc-2; i+=2){
+		if(error = pthread_join(tid[i], (void **)&return_value)){
+			perror("Failed to join thread.\n");
+			return 0;
+		}
+		if(*return_value == 1){			/* if one thread failed to compile, then return */
+			fprintf(stderr, "return value:	1\n");
+			flag = 1;
+		}
+		else{
+			fprintf(stderr, "return value:	0\n");
+		}
+	}
+	
+	if(flag == 1){
+		fprintf(stderr, "Errors occur in compiling.\n");
+		return 0;
+	}
+
+	child = fork();
+
+	if(child < 0){
+		perror("Fail to fork\n");
+		return 0;
+	}
+
+	if(child == 0){			/* Child code */
+		execvp(path, snew);
+		perror("Child failed to exec the command");
+		return 0;
+	}
+
+	for(i = 1; i < pos; i++){	/* free all the allocated memory */
+		free(*(snew + i));
+	}
+	free(snew);
+
+	while(r_wait(NULL) > 0);	/* wait for all children */
+
+	free(tid);
+	return 1;
+}
